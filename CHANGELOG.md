@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.0.8
+
+_Minimum HA Version: 2024.1.0b0_
+
+- Set minimum HA version for component to 2024.1.0b0
+
+## v1.0.7
+
+_Minimum HA Version: 2024.1.0_
+
+- Adjust code to HA 2024.1.0
+
+## v1.0.6
+
+- Redact sensitive information from diagnostic file
+
 ## v1.0.5
 
 - Fix error while trying to parse AWS message
