@@ -2,7 +2,7 @@ from abc import ABC
 import logging
 from typing import Any
 
-from homeassistant.components.light import LightEntity
+from homeassistant.components.light import ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
@@ -52,6 +52,9 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, LightEntity, ABC):
         coordinator: MyDolphinPlusCoordinator,
     ):
         super().__init__(entity_description, coordinator)
+
+        self._attr_supported_color_modes = {ColorMode.ONOFF}
+        self._attr_color_mode = ColorMode.ONOFF
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self.async_execute_device_action(ACTION_ENTITY_TURN_ON)

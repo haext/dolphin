@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.0.13
+
+- Fix reconnect process
+- Fix threadsafe warning log messages
+- Fix color more error log messages
+
+## v1.0.13b2
+
+- Remove typo of args in AWS client message handling
+
+## v1.0.13b1
+
+- Remove typo of args in AWS client message handling
+
+## v1.0.13b0
+
+- Add threadsafe handling for set status
+- Add safe block for AWS client termination process
+- Fix color mode warning on startup
+
+## v1.0.12
+
+- Fix light support modes warning
+- Fix StrEnum warning
+- Add thread safe handling for callbacks from AWS IoT client
+- Remove sleep between terminating websocket connection and creating new one
+
 ## v1.0.11
 
 - Fix IOT Broker disconnect
@@ -285,7 +312,7 @@ ERROR (MainThread) [custom_components.mydolphin_plus.managers.config_manager] In
 ## v0.0.8
 
 - Add a list of relevant states that also determine if a robot is not actively cleaning
-- Added MyDolpin Plus to the standard HACS repo
+- Added MyDolphin Plus to the standard HACS repo
 
 ## v0.0.7
 
