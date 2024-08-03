@@ -2,7 +2,15 @@ from abc import ABC
 import logging
 from typing import Any
 
-from homeassistant.components.vacuum import StateVacuumEntity
+from homeassistant.components.vacuum import (
+    SERVICE_LOCATE,
+    SERVICE_PAUSE,
+    SERVICE_RETURN_TO_BASE,
+    SERVICE_SEND_COMMAND,
+    SERVICE_SET_FAN_SPEED,
+    SERVICE_START,
+    StateVacuumEntity,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_MODE, ATTR_STATE, Platform
 from homeassistant.core import HomeAssistant, callback
@@ -10,20 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.icon import icon_for_battery_level
 
 from .common.base_entity import MyDolphinPlusBaseEntity, async_setup_entities
-from .common.consts import (
-    ACTION_ENTITY_LOCATE,
-    ACTION_ENTITY_PAUSE,
-    ACTION_ENTITY_RETURN_TO_BASE,
-    ACTION_ENTITY_SEND_COMMAND,
-    ACTION_ENTITY_SET_FAN_SPEED,
-    ACTION_ENTITY_START,
-    ACTION_ENTITY_STOP,
-    ACTION_ENTITY_TOGGLE,
-    ACTION_ENTITY_TURN_OFF,
-    ACTION_ENTITY_TURN_ON,
-    ATTR_ATTRIBUTES,
-    SIGNAL_DEVICE_NEW,
-)
+from .common.consts import ATTR_ATTRIBUTES, SIGNAL_DEVICE_NEW
 from .common.entity_descriptions import MyDolphinPlusVacuumEntityDescription
 from .managers.coordinator import MyDolphinPlusCoordinator
 
@@ -72,28 +67,16 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
 
     async def async_return_to_base(self, **kwargs: Any) -> None:
         """Set the vacuum cleaner to return to the dock."""
-        await self.async_execute_device_action(ACTION_ENTITY_RETURN_TO_BASE)
+        await self.async_execute_device_action(SERVICE_RETURN_TO_BASE)
 
     async def async_set_fan_speed(self, fan_speed: str, **kwargs: Any) -> None:
-        await self.async_execute_device_action(ACTION_ENTITY_SET_FAN_SPEED, fan_speed)
+        await self.async_execute_device_action(SERVICE_SET_FAN_SPEED, fan_speed)
 
     async def async_start(self) -> None:
-        await self.async_execute_device_action(ACTION_ENTITY_START, self.state)
+        await self.async_execute_device_action(SERVICE_START, self.state)
 
-    async def async_stop(self, **kwargs: Any) -> None:
-        await self.async_execute_device_action(ACTION_ENTITY_STOP, self.state)
-
-    async def async_pause(self) -> None:
-        await self.async_execute_device_action(ACTION_ENTITY_PAUSE, self.state)
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.async_execute_device_action(ACTION_ENTITY_TURN_ON, self.state)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.async_execute_device_action(ACTION_ENTITY_TURN_OFF, self.state)
-
-    async def async_toggle(self, **kwargs: Any) -> None:
-        await self.async_execute_device_action(ACTION_ENTITY_TOGGLE, self.state)
+    async def async_pause(self, **kwargs: Any) -> None:
+        await self.async_execute_device_action(SERVICE_PAUSE, self.state)
 
     async def async_send_command(
         self,
@@ -102,13 +85,11 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
         **kwargs: Any,
     ) -> None:
         """Send a command to a vacuum cleaner."""
-        await self.async_execute_device_action(
-            ACTION_ENTITY_SEND_COMMAND, command, params
-        )
+        await self.async_execute_device_action(SERVICE_SEND_COMMAND, command, params)
 
     async def async_locate(self, **kwargs: Any) -> None:
         """Locate the vacuum cleaner."""
-        await self.async_execute_device_action(ACTION_ENTITY_LOCATE)
+        await self.async_execute_device_action(SERVICE_LOCATE)
 
     def update_component(self, data):
         """Fetch new state parameters for the sensor."""

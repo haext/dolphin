@@ -9,6 +9,7 @@ import sys
 from time import sleep
 from typing import Any
 
+import aiofiles
 from awscrt import auth, mqtt
 from awsiot import mqtt_connection_builder
 
@@ -20,8 +21,6 @@ from ..common.clean_modes import CleanModes
 from ..common.connection_callbacks import ConnectionCallbacks
 from ..common.connectivity_status import IGNORED_TRANSITIONS, ConnectivityStatus
 from ..common.consts import (
-    API_DATA_MOTOR_UNIT_SERIAL,
-    API_DATA_SERIAL_NUMBER,
     API_RESPONSE_DATA_ACCESS_KEY_ID,
     API_RESPONSE_DATA_SECRET_ACCESS_KEY,
     API_RESPONSE_DATA_TOKEN,
@@ -35,6 +34,7 @@ from ..common.consts import (
     DATA_LED_ENABLE,
     DATA_LED_INTENSITY,
     DATA_LED_MODE,
+    DATA_ROBOT_FAMILY,
     DATA_ROOT_STATE,
     DATA_ROOT_TIMESTAMP,
     DATA_ROOT_VERSION,
@@ -54,6 +54,7 @@ from ..common.consts import (
     DEFAULT_ENABLE,
     DEFAULT_LED_INTENSITY,
     DEFAULT_TIME_PART,
+    DOMAIN,
     DYNAMIC_CONTENT,
     DYNAMIC_CONTENT_DIRECTION,
     DYNAMIC_CONTENT_MOTOR_UNIT_SERIAL,
@@ -68,17 +69,16 @@ from ..common.consts import (
     JOYSTICK_SPEED,
     LED_MODE_BLINKING,
     MQTT_MESSAGE_ENCODING,
-    PWS_STATE_OFF,
-    PWS_STATE_ON,
     SIGNAL_AWS_CLIENT_STATUS,
     TOPIC_CALLBACK_ACCEPTED,
     TOPIC_CALLBACK_REJECTED,
-    UPDATE_API_INTERVAL,
     WS_DATA_DIFF,
     WS_DATA_TIMESTAMP,
     WS_DATA_VERSION,
     WS_LAST_UPDATE,
 )
+from ..common.power_supply_state import PowerSupplyState
+from ..common.robot_family import RobotFamily
 from ..models.topic_data import TopicData
 from .config_manager import ConfigManager
 
@@ -87,16 +87,22 @@ _LOGGER = logging.getLogger(__name__)
 
 class AWSClient:
     _awsiot_client: mqtt.Connection | None
+    _robot_family: RobotFamily | None
 
     _topic_data: TopicData | None
     _status: ConnectivityStatus | None
 
     def __init__(self, hass: HomeAssistant | None, config_manager: ConfigManager):
         try:
+            awsiot_id = (
+                DOMAIN if config_manager.entry_id is None else config_manager.entry_id
+            )
+
             self._hass = hass
             self._loop = asyncio.new_event_loop() if hass is None else hass.loop
             self._config_manager = config_manager
-            self._awsiot_id = config_manager.entry_id
+            self._awsiot_id = awsiot_id
+            self._robot_family = None
 
             self._api_data = {}
             self._data = {}
@@ -170,14 +176,13 @@ class AWSClient:
 
             self._awsiot_client = None
 
-        self._set_status(ConnectivityStatus.Disconnected)
-        _LOGGER.debug("AWS Client is disconnected")
+        self._set_status(ConnectivityStatus.DISCONNECTED, "terminate requested")
 
     async def initialize(self):
         try:
-            _LOGGER.info("Initializing MyDolphin AWS IOT WS")
-
-            self._set_status(ConnectivityStatus.Connecting)
+            self._set_status(
+                ConnectivityStatus.CONNECTING, "Initializing MyDolphin AWS IOT WS"
+            )
 
             aws_token = self._api_data.get(API_RESPONSE_DATA_TOKEN)
             aws_key = self._api_data.get(API_RESPONSE_DATA_ACCESS_KEY_ID)
@@ -187,43 +192,17 @@ class AWSClient:
                 f"AWS IAM Credentials, Key: {aws_key}, Secret: {aws_secret}, Token: {aws_token}"
             )
 
-            motor_unit_serial = self._api_data.get(API_DATA_MOTOR_UNIT_SERIAL)
+            self._topic_data = TopicData(self._config_manager.motor_unit_serial)
 
-            self._topic_data = TopicData(motor_unit_serial)
+            ca_content = await self._get_certificate()
 
-            script_dir = os.path.dirname(__file__)
-            ca_file_path = os.path.join(script_dir, CA_FILE_NAME)
+            if self._is_home_assistant:
+                client = await self._hass.async_add_executor_job(
+                    self._get_client, aws_key, aws_secret, aws_token, ca_content
+                )
 
-            _LOGGER.debug(f"Loading CA file from {ca_file_path}")
-            credentials_provider = auth.AwsCredentialsProvider.new_static(
-                aws_key, aws_secret, aws_token
-            )
-
-            client = mqtt_connection_builder.websockets_with_default_aws_signing(
-                endpoint=AWS_IOT_URL,
-                port=AWS_IOT_PORT,
-                region=AWS_REGION,
-                ca_filepath=ca_file_path,
-                credentials_provider=credentials_provider,
-                client_id=self._awsiot_id,
-                clean_session=False,
-                keep_alive_secs=30,
-                on_connection_success=self._connection_callbacks.get(
-                    ConnectionCallbacks.SUCCESS
-                ),
-                on_connection_failure=self._connection_callbacks.get(
-                    ConnectionCallbacks.FAILURE
-                ),
-                on_connection_closed=self._connection_callbacks.get(
-                    ConnectionCallbacks.CLOSED
-                ),
-                on_connection_interrupted=self._connection_callbacks.get(
-                    ConnectionCallbacks.INTERRUPTED
-                ),
-                on_connection_resumed=self._connection_callbacks.get(
-                    ConnectionCallbacks.RESUMED
-                ),
-            )
+            else:
+                client = self._get_client(aws_key, aws_secret, aws_token, ca_content)
 
             def _on_connect_future_completed(future):
                 future_results = future.result()
@@ -238,11 +217,42 @@ class AWSClient:
             exc_type, exc_obj, tb = sys.exc_info()
             line_number = tb.tb_lineno
 
-            _LOGGER.error(
-                f"Failed to initialize MyDolphin Plus WS, error: {ex}, line: {line_number}"
-            )
+            message = f"Failed to initialize MyDolphin Plus WS, error: {ex}, line: {line_number}"
 
-            self._set_status(ConnectivityStatus.Failed)
+            self._set_status(ConnectivityStatus.FAILED, message)
+
+    def _get_client(self, aws_key, aws_secret, aws_token, ca_content):
+        credentials_provider = auth.AwsCredentialsProvider.new_static(
+            aws_key, aws_secret, aws_token
+        )
+
+        client = mqtt_connection_builder.websockets_with_default_aws_signing(
+            endpoint=AWS_IOT_URL,
+            port=AWS_IOT_PORT,
+            region=AWS_REGION,
+            ca_bytes=ca_content,
+            credentials_provider=credentials_provider,
+            client_id=self._awsiot_id,
+            clean_session=False,
+            keep_alive_secs=30,
+            on_connection_success=self._connection_callbacks.get(
+                ConnectionCallbacks.SUCCESS
+            ),
+            on_connection_failure=self._connection_callbacks.get(
+                ConnectionCallbacks.FAILURE
+            ),
+            on_connection_closed=self._connection_callbacks.get(
+                ConnectionCallbacks.CLOSED
+            ),
+            on_connection_interrupted=self._connection_callbacks.get(
+                ConnectionCallbacks.INTERRUPTED
+            ),
+            on_connection_resumed=self._connection_callbacks.get(
+                ConnectionCallbacks.RESUMED
+            ),
+        )
+
+        return client
 
     def _subscribe(self):
         _LOGGER.debug(f"Subscribing topics: {self._topic_data.subscribe}")
@@ -280,30 +290,29 @@ class AWSClient:
     async def update_api_data(self, api_data: dict):
         self._api_data = api_data
 
+        if api_data is None:
+            self._robot_family = RobotFamily.ALL
+
+        else:
+            robot_family_str = api_data.get(DATA_ROBOT_FAMILY)
+            self._robot_family = RobotFamily.from_string(robot_family_str)
+
     async def update(self):
-        if self._status == ConnectivityStatus.Connected:
-            _LOGGER.debug("Connected. Refresh details")
-            await self._refresh_details()
-
-    async def _refresh_details(self, forced: bool = False):
         try:
-            now = datetime.now().timestamp()
-            last_update = self.data.get(WS_LAST_UPDATE, 0)
+            if self._status == ConnectivityStatus.CONNECTED:
+                _LOGGER.debug("Connected. Refresh details")
 
-            diff_seconds = int(now) - last_update
+                now = datetime.now().timestamp()
 
-            if forced or diff_seconds >= UPDATE_API_INTERVAL.total_seconds():
                 self.data[WS_LAST_UPDATE] = int(now)
 
-                self._publish(self._topic_data.get, None)
+                self._publish(self._topic_data.get)
 
         except Exception as ex:
             exc_type, exc_obj, tb = sys.exc_info()
             line_number = tb.tb_lineno
 
-            _LOGGER.error(
-                f"Failed to refresh MyDolphin Plus WS data, error: {ex}, line: {line_number}"
-            )
+            _LOGGER.error(f"Failed to update WS data, error: {ex}, line: {line_number}")
 
     def _on_connection_success(self, connection, callback_data):
         if isinstance(callback_data, mqtt.OnConnectionSuccessData):
@@ -312,29 +321,32 @@ class AWSClient:
 
             self._subscribe()
 
-            self._set_status(ConnectivityStatus.Connected)
+            self._set_status(ConnectivityStatus.CONNECTED)
 
     def _on_connection_failure(self, connection, callback_data):
         if connection is not None and isinstance(
             callback_data, mqtt.OnConnectionFailureData
         ):
-            _LOGGER.error(f"AWS IoT connection failed, Error: {callback_data.error}")
+            message = f"AWS IoT connection failed, Error: {callback_data.error}"
 
-            self._set_status(ConnectivityStatus.Failed)
+            self._set_status(ConnectivityStatus.FAILED, message)
 
     def _on_connection_closed(self, connection, callback_data):
         if connection is not None and isinstance(
             callback_data, mqtt.OnConnectionClosedData
         ):
-            _LOGGER.debug("AWS IoT connection was closed")
+            message = "AWS IoT connection was closed"
 
-            self._set_status(ConnectivityStatus.Disconnected)
+            self._set_status(ConnectivityStatus.DISCONNECTED, message)
 
     def _on_connection_interrupted(self, connection, error, **_kwargs):
-        _LOGGER.error(f"AWS IoT connection interrupted, Error: {error}")
+        message = f"AWS IoT connection interrupted, Error: {error}"
 
-        if connection is not None:
-            self._set_status(ConnectivityStatus.Failed)
+        if connection is None:
+            _LOGGER.error(message)
+
+        else:
+            self._set_status(ConnectivityStatus.FAILED, message)
 
     def _on_connection_resumed(
         self, connection, return_code, session_present, **_kwargs
@@ -351,7 +363,7 @@ class AWSClient:
 
             resubscribe_future.add_done_callback(self._on_resubscribe_complete)
 
-        self._set_status(ConnectivityStatus.Connected)
+        self._set_status(ConnectivityStatus.CONNECTED)
 
     @staticmethod
     def _on_resubscribe_complete(resubscribe_future):
@@ -369,7 +381,7 @@ class AWSClient:
             has_message = len(message_payload) <= 0
             payload_data = {} if has_message else json.loads(message_payload)
 
-            motor_unit_serial = self._api_data.get(API_DATA_SERIAL_NUMBER)
+            motor_unit_serial = self._config_manager.motor_unit_serial
             _LOGGER.debug(
                 f"Message received for device {motor_unit_serial}, Topic: {topic}"
             )
@@ -419,7 +431,8 @@ class AWSClient:
                             self.data[category] = category_data
 
                 if topic == self._topic_data.get_accepted:
-                    self._read_temperature_and_in_water_details()
+                    if self._robot_family == RobotFamily.M700:
+                        self._read_temperature_and_in_water_details()
 
                 elif topic == self._topic_data.update_accepted:
                     desired = state.get(DATA_STATE_DESIRED)
@@ -453,13 +466,13 @@ class AWSClient:
 
         self._publish(self._topic_data.dynamic, payload)
 
-    def _publish(self, topic: str, data: dict | None):
+    def _publish(self, topic: str, data: dict | None = None):
         if data is None:
             data = {}
 
         payload = json.dumps(data)
 
-        if self._status == ConnectivityStatus.Connected:
+        if self._status == ConnectivityStatus.CONNECTED:
             try:
                 if self._awsiot_client is not None:
                     publish_future, packet_id = self._awsiot_client.publish(
@@ -557,8 +570,8 @@ class AWSClient:
         self._send_dynamic_command(DYNAMIC_DESCRIPTION_JOYSTICK, request_data)
 
     def _read_temperature_and_in_water_details(self):
-        motor_unit_serial = self._api_data.get(API_DATA_SERIAL_NUMBER)
-        serial_number = self._api_data.get(API_DATA_SERIAL_NUMBER)
+        motor_unit_serial = self._config_manager.motor_unit_serial
+        serial_number = self._config_manager.serial_number
 
         request_data = {
             DYNAMIC_CONTENT_SERIAL_NUMBER: serial_number,
@@ -570,10 +583,10 @@ class AWSClient:
     def pickup(self):
         self.set_cleaning_mode(CleanModes.PICKUP)
 
-    def set_power_state(self, is_on: bool):
+    def pause(self):
         request_data = {
             DATA_SECTION_SYSTEM_STATE: {
-                DATA_SYSTEM_STATE_PWS_STATE: PWS_STATE_ON if is_on else PWS_STATE_OFF
+                DATA_SYSTEM_STATE_PWS_STATE: PowerSupplyState.OFF.value
             }
         }
 
@@ -625,27 +638,39 @@ class AWSClient:
 
         return data
 
-    def _set_status(self, status: ConnectivityStatus):
+    def _set_status(self, status: ConnectivityStatus, message: str | None = None):
+        log_level = ConnectivityStatus.get_log_level(status)
+
         if status != self._status:
             ignored_transitions = IGNORED_TRANSITIONS.get(self._status, [])
+            should_perform_action = status not in ignored_transitions
 
-            if status in ignored_transitions:
-                return
+            log_message = f"Status update {self._status} --> {status}"
 
-            log_level = ConnectivityStatus.get_log_level(status)
+            if not should_perform_action:
+                log_message = f"{log_message}, no action will be performed"
 
-            _LOGGER.log(
-                log_level,
-                f"Status changed from '{self._status}' to '{status}'",
-            )
+            if message is not None:
+                log_message = f"{log_message}, {message}"
 
-            self._status = status
+            _LOGGER.log(log_level, log_message)
 
-            self._async_dispatcher_send(
-                SIGNAL_AWS_CLIENT_STATUS,
-                self._config_manager.entry_id,
-                status,
-            )
+            if should_perform_action:
+                self._status = status
+
+                self._async_dispatcher_send(
+                    SIGNAL_AWS_CLIENT_STATUS,
+                    self._config_manager.entry_id,
+                    status,
+                )
+
+        else:
+            log_message = f"Status is {status}"
+
+            if message is None:
+                log_message = f"{log_message}, {message}"
+
+            _LOGGER.log(log_level, log_message)
 
     def set_local_async_dispatcher_send(self, callback):
         self._local_async_dispatcher_send = callback
@@ -656,3 +681,16 @@ class AWSClient:
 
         else:
             dispatcher_send(self._hass, signal, *args)
+
+    @staticmethod
+    async def _get_certificate():
+        script_dir = os.path.dirname(__file__)
+        ca_file_path = os.path.join(script_dir, CA_FILE_NAME)
+
+        _LOGGER.debug(f"Loading CA file from {ca_file_path}")
+
+        ca_file = await aiofiles.open(ca_file_path, mode="rb")
+        ca_content = await ca_file.read()
+        await ca_file.close()
+
+        return ca_content

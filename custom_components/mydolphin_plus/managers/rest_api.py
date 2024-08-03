@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from asyncio import sleep
 from base64 import b64encode
 import hashlib
 import logging
@@ -8,6 +9,7 @@ import sys
 from typing import Any
 
 from aiohttp import ClientResponseError, ClientSession
+from aiohttp.hdrs import METH_GET, METH_POST
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
@@ -17,15 +19,13 @@ from homeassistant.helpers.dispatcher import dispatcher_send
 
 from ..common.connectivity_status import ConnectivityStatus
 from ..common.consts import (
-    API_DATA_LOGIN_TOKEN,
-    API_DATA_MOTOR_UNIT_SERIAL,
-    API_DATA_SERIAL_NUMBER,
     API_REQUEST_HEADER_TOKEN,
     API_REQUEST_SERIAL_EMAIL,
     API_REQUEST_SERIAL_NUMBER,
     API_REQUEST_SERIAL_PASSWORD,
     API_RESPONSE_ALERT,
     API_RESPONSE_DATA,
+    API_RESPONSE_IS_EMAIL_EXISTS,
     API_RESPONSE_STATUS,
     API_RESPONSE_STATUS_FAILURE,
     API_RESPONSE_STATUS_SUCCESS,
@@ -34,14 +34,14 @@ from ..common.consts import (
     BLOCK_SIZE,
     DATA_ROBOT_DETAILS,
     DEFAULT_NAME,
+    EMAIL_VALIDATION_URL,
+    FORGOT_PASSWORD_URL,
     LOGIN_HEADERS,
     LOGIN_URL,
-    MAXIMUM_ATTEMPTS_GET_AWS_TOKEN,
     ROBOT_DETAILS_BY_SN_URL,
     ROBOT_DETAILS_URL,
     SIGNAL_API_STATUS,
     SIGNAL_DEVICE_NEW,
-    STORAGE_DATA_AWS_TOKEN_ENCRYPTED_KEY,
     TOKEN_URL,
 )
 from ..models.config_data import ConfigData
@@ -97,24 +97,6 @@ class RestAPI:
         return result
 
     @property
-    def aws_token_encrypted_key(self) -> str | None:
-        key = self.data.get(STORAGE_DATA_AWS_TOKEN_ENCRYPTED_KEY)
-
-        return key
-
-    @property
-    def _login_token(self) -> str | None:
-        login_token = self.data.get(API_DATA_LOGIN_TOKEN)
-
-        return login_token
-
-    @property
-    def _motor_unit_serial(self):
-        motor_unit_serial = self.data.get(API_DATA_MOTOR_UNIT_SERIAL)
-
-        return motor_unit_serial
-
-    @property
     def status(self) -> str | None:
         status = self._status
 
@@ -124,19 +106,18 @@ class RestAPI:
     def _is_home_assistant(self):
         return self._hass is not None
 
-    async def initialize(self, aws_token_encrypted_key: str | None):
+    async def initialize(self):
         _LOGGER.info("Initializing MyDolphin API")
 
-        self.data[STORAGE_DATA_AWS_TOKEN_ENCRYPTED_KEY] = aws_token_encrypted_key
-
         await self._initialize_session()
+
         await self._login()
 
     async def terminate(self):
         if self._session is not None:
             await self._session.close()
 
-            self._set_status(ConnectivityStatus.Disconnected)
+            self._set_status(ConnectivityStatus.DISCONNECTED, "terminate requested")
 
     async def _initialize_session(self):
         try:
@@ -150,11 +131,11 @@ class RestAPI:
             exc_type, exc_obj, tb = sys.exc_info()
             line_number = tb.tb_lineno
 
-            _LOGGER.warning(
+            message = (
                 f"Failed to initialize session, Error: {str(ex)}, Line: {line_number}"
             )
 
-            self._set_status(ConnectivityStatus.Failed)
+            self._set_status(ConnectivityStatus.FAILED, message)
 
     async def validate(self):
         await self._initialize_session()
@@ -178,25 +159,13 @@ class RestAPI:
                 )
 
         except ClientResponseError as crex:
-            _LOGGER.error(
-                f"Failed to post JSON to {url}, HTTP Status: {crex.message} ({crex.status})"
-            )
+            await self._handle_client_error(url, METH_POST, crex)
 
-            if crex.status in [401, 403]:
-                self._set_status(ConnectivityStatus.Failed)
-
-            elif crex.status in [404, 405]:
-                self._set_status(ConnectivityStatus.NotFound)
+        except TimeoutError:
+            self._handle_server_timeout(url, METH_POST)
 
         except Exception as ex:
-            exc_type, exc_obj, tb = sys.exc_info()
-            line_number = tb.tb_lineno
-
-            _LOGGER.error(
-                f"Failed to post JSON to {url}, Error: {ex}, Line: {line_number}"
-            )
-
-            self._set_status(ConnectivityStatus.Failed)
+            self._handle_general_request_failure(url, METH_POST, ex)
 
         return result
 
@@ -216,31 +185,18 @@ class RestAPI:
                 )
 
         except ClientResponseError as crex:
-            _LOGGER.error(
-                f"Failed to get data from {url}, HTTP Status: {crex.message} ({crex.status})"
-            )
+            await self._handle_client_error(url, METH_GET, crex)
 
-            if crex.status in [404, 405]:
-                self._set_status(ConnectivityStatus.NotFound)
+        except TimeoutError:
+            self._handle_server_timeout(url, METH_GET)
 
         except Exception as ex:
-            exc_type, exc_obj, tb = sys.exc_info()
-            line_number = tb.tb_lineno
-
-            _LOGGER.error(
-                f"Failed to get data from {url}, Error: {ex}, Line: {line_number}"
-            )
-
-            self._set_status(ConnectivityStatus.Failed)
+            self._handle_general_request_failure(url, METH_GET, ex)
 
         return result
 
     async def update(self):
-        if self._status == ConnectivityStatus.Failed:
-            _LOGGER.debug("Connection failed. Reinitialize")
-            await self.initialize(self.aws_token_encrypted_key)
-
-        if self._status == ConnectivityStatus.Connected:
+        if self._status == ConnectivityStatus.CONNECTED:
             _LOGGER.debug("Connected. Refresh details")
             await self._load_details()
 
@@ -253,21 +209,107 @@ class RestAPI:
 
             _LOGGER.debug(f"API Data updated: {self.data}")
 
+    async def _clean_login_details(self):
+        await self._config_manager.reset_login_details()
+
     async def _login(self):
-        await self._service_login()
+        if self._config_manager.api_token is None:
+            await self._service_login()
 
-        if self._status == ConnectivityStatus.TemporaryConnected:
-            await self._generate_token()
+        else:
+            self._set_status(
+                ConnectivityStatus.TEMPORARY_CONNECTED, "API Token available"
+            )
 
-        elif self._status == ConnectivityStatus.InvalidCredentials:
+        if self._status == ConnectivityStatus.TEMPORARY_CONNECTED:
+            await self._generate_aws_token()
+
+        elif self._status in [
+            ConnectivityStatus.INVALID_CREDENTIALS,
+            ConnectivityStatus.INVALID_ACCOUNT,
+        ]:
             return
 
         else:
-            self._set_status(ConnectivityStatus.Failed)
+            self._set_status(ConnectivityStatus.FAILED, "general failure of login")
+
+    async def reset_password(self):
+        _LOGGER.debug("Starting reset password process")
+
+        if self._session is None:
+            await self._initialize_session()
+
+        is_valid_email = await self._email_validation()
+
+        if is_valid_email:
+            username = self.config_data.username
+
+            request_data = f"{API_REQUEST_SERIAL_EMAIL}={username}"
+
+            payload = await self._async_post(
+                FORGOT_PASSWORD_URL, LOGIN_HEADERS, request_data
+            )
+
+            if payload is None:
+                _LOGGER.error("Empty response of reset password")
+
+            else:
+                data = payload.get(API_RESPONSE_DATA)
+
+                if data is None:
+                    _LOGGER.error("Empty response payload of reset password")
+
+                else:
+                    _LOGGER.info(f"Reset password response: {data}")
+
+    async def _email_validation(self) -> bool:
+        _LOGGER.debug("Validating account email")
+
+        if self._status != ConnectivityStatus.INVALID_ACCOUNT:
+            username = self.config_data.username
+
+            request_data = f"{API_REQUEST_SERIAL_EMAIL}={username}"
+
+            payload = await self._async_post(
+                EMAIL_VALIDATION_URL, LOGIN_HEADERS, request_data
+            )
+
+            if payload is None:
+                self._set_status(
+                    ConnectivityStatus.INVALID_ACCOUNT,
+                    "empty response of email validation",
+                )
+
+            else:
+                data = payload.get(API_RESPONSE_DATA)
+
+                if data is None:
+                    self._set_status(
+                        ConnectivityStatus.INVALID_ACCOUNT,
+                        "empty response payload of email validation",
+                    )
+
+                else:
+                    status = data.get(API_RESPONSE_IS_EMAIL_EXISTS, False)
+
+                    if not status:
+                        self._set_status(
+                            ConnectivityStatus.INVALID_ACCOUNT,
+                            f"account [{username}] is not valid",
+                        )
+
+        is_valid_account = self._status != ConnectivityStatus.INVALID_ACCOUNT
+
+        return is_valid_account
 
     async def _service_login(self):
         try:
-            self._set_status(ConnectivityStatus.Connecting)
+            is_valid_account = await self._email_validation()
+
+            if not is_valid_account:
+                return
+
+            self._set_status(ConnectivityStatus.CONNECTING)
 
             username = self.config_data.username
             password = self.config_data.password
@@ -277,42 +319,47 @@ class RestAPI:
             payload = await self._async_post(LOGIN_URL, LOGIN_HEADERS, request_data)
 
             if payload is None:
-                payload = {}
-
-            data = payload.get(API_RESPONSE_DATA, {})
-            if data:
-                _LOGGER.info(f"Logged in to user {username}")
-
-                motor_unit_serial = data.get(API_REQUEST_SERIAL_NUMBER)
-                token = data.get(API_REQUEST_HEADER_TOKEN)
-
-                self.data[API_DATA_SERIAL_NUMBER] = motor_unit_serial
-                self.data[API_DATA_LOGIN_TOKEN] = token
-
-                await self._set_actual_motor_unit_serial()
+                self._set_status(ConnectivityStatus.FAILED, "empty response of login")
 
             else:
-                self._set_status(ConnectivityStatus.InvalidCredentials)
+                data = payload.get(API_RESPONSE_DATA)
+
+                if data is None:
+                    self._set_status(
+                        ConnectivityStatus.INVALID_CREDENTIALS,
+                        "empty response payload of login",
+                    )
+
+                else:
+                    _LOGGER.info(f"Logged in to user {username}")
+
+                    serial_number = data.get(API_REQUEST_SERIAL_NUMBER)
+                    api_token = data.get(API_REQUEST_HEADER_TOKEN)
+
+                    await self._config_manager.update_login_details(
+                        api_token, serial_number
+                    )
+
+                    await self._set_actual_motor_unit_serial()
 
         except Exception as ex:
             exc_type, exc_obj, tb = sys.exc_info()
             line_number = tb.tb_lineno
 
-            _LOGGER.error(
-                f"Failed to login into {DEFAULT_NAME} service, Error: {str(ex)}, Line: {line_number}"
-            )
-            self._set_status(ConnectivityStatus.Failed)
+            message = f"Failed to login into {DEFAULT_NAME} service, Error: {str(ex)}, Line: {line_number}"
+
+            self._set_status(ConnectivityStatus.FAILED, message)
 
     async def _set_actual_motor_unit_serial(self):
         try:
-            serial_serial = self.data.get(API_DATA_SERIAL_NUMBER)
-
-            headers = {API_REQUEST_HEADER_TOKEN: self._login_token}
+            headers = {API_REQUEST_HEADER_TOKEN: self._config_manager.api_token}
 
             for key in LOGIN_HEADERS:
                 headers[key] = LOGIN_HEADERS[key]
 
-            request_data = f"{API_REQUEST_SERIAL_NUMBER}={serial_serial}"
+            request_data = (
+                f"{API_REQUEST_SERIAL_NUMBER}={self._config_manager.serial_number}"
+            )
 
             payload = await self._async_post(
                 ROBOT_DETAILS_BY_SN_URL, headers, request_data
@@ -324,44 +371,41 @@ class RestAPI:
             data: dict = payload.get(API_RESPONSE_DATA, {})
 
             if data is not None:
-                _LOGGER.info(
-                    f"Successfully retrieved details for device {serial_serial}"
-                )
+                message = f"Successfully retrieved details for device {self._config_manager.serial_number}"
 
-                self.data[API_DATA_MOTOR_UNIT_SERIAL] = data.get(
-                    API_RESPONSE_UNIT_SERIAL_NUMBER
-                )
+                motor_unit_serial = data.get(API_RESPONSE_UNIT_SERIAL_NUMBER)
 
-                self._set_status(ConnectivityStatus.TemporaryConnected)
+                await self._config_manager.update_motor_unit_serial(motor_unit_serial)
+
+                self._set_status(ConnectivityStatus.TEMPORARY_CONNECTED, message)
 
         except Exception as ex:
             exc_type, exc_obj, tb = sys.exc_info()
             line_number = tb.tb_lineno
 
-            _LOGGER.error(
-                f"Failed to login into {DEFAULT_NAME} service, Error: {str(ex)}, Line: {line_number}"
-            )
-            self._set_status(ConnectivityStatus.Failed)
+            message = f"Failed to login into {DEFAULT_NAME} service, Error: {str(ex)}, Line: {line_number}"
 
-    async def _generate_token(self):
+            self._set_status(ConnectivityStatus.FAILED, message)
+
+    async def _generate_aws_token(self):
         try:
-            get_token_attempts = 0
-
-            headers = {API_REQUEST_HEADER_TOKEN: self._login_token}
+            headers = {API_REQUEST_HEADER_TOKEN: self._config_manager.api_token}
 
             for key in LOGIN_HEADERS:
                 headers[key] = LOGIN_HEADERS[key]
 
-            while get_token_attempts < MAXIMUM_ATTEMPTS_GET_AWS_TOKEN:
-                if self.aws_token_encrypted_key is None:
-                    self._generate_aws_token_encrypted_key()
+            aws_token = self._config_manager.aws_token
 
-                request_data = (
-                    f"{API_REQUEST_SERIAL_NUMBER}={self.aws_token_encrypted_key}"
-                )
+            if aws_token is None:
+                aws_token = await self._get_aws_token()
 
-                payload = await self._async_post(TOKEN_URL, headers, request_data)
+                await self._config_manager.update_aws_token(aws_token)
 
+            request_data = f"{API_REQUEST_SERIAL_NUMBER}={aws_token}"
+
+            payload = await self._async_post(TOKEN_URL, headers, request_data)
+
+            if self._status == ConnectivityStatus.TEMPORARY_CONNECTED:
                 data = payload.get(API_RESPONSE_DATA, {})
                 alert = payload.get(API_RESPONSE_ALERT, {})
                 status = payload.get(API_RESPONSE_STATUS, API_RESPONSE_STATUS_FAILURE)
@@ -370,48 +414,36 @@ class RestAPI:
                     for field in API_TOKEN_FIELDS:
                         self.data[field] = data.get(field)
 
-                    self._set_status(ConnectivityStatus.Connected)
-
-                    if get_token_attempts > 0:
-                        _LOGGER.debug(
-                            f"Retrieved AWS token after {get_token_attempts} attempts"
-                        )
-
-                    get_token_attempts = MAXIMUM_ATTEMPTS_GET_AWS_TOKEN
+                    self._set_status(ConnectivityStatus.CONNECTED)
 
                 else:
-                    self.data[STORAGE_DATA_AWS_TOKEN_ENCRYPTED_KEY] = None
+                    message = f"Failed to retrieve AWS token, Error: {alert}"
 
-                    if get_token_attempts + 1 >= MAXIMUM_ATTEMPTS_GET_AWS_TOKEN:
-                        _LOGGER.error(
-                            f"Failed to retrieve AWS token after {get_token_attempts} attempts, Error: {alert}"
-                        )
+                    self._set_status(ConnectivityStatus.FAILED, message)
 
-                        self._set_status(ConnectivityStatus.Failed)
-
-                get_token_attempts += 1
+                    await self._config_manager.update_aws_token(None)
 
         except Exception as ex:
             exc_type, exc_obj, tb = sys.exc_info()
             line_number = tb.tb_lineno
 
-            _LOGGER.error(
-                f"Failed to retrieve AWS token from service, Error: {str(ex)}, Line: {line_number}"
-            )
-            self._set_status(ConnectivityStatus.Failed)
+            message = f"Failed to retrieve AWS token from service, Error: {str(ex)}, Line: {line_number}"
+
+            self._set_status(ConnectivityStatus.FAILED, message)
 
     async def _load_details(self):
-        if self._status != ConnectivityStatus.Connected:
-            self._set_status(ConnectivityStatus.Failed)
+        if self._status != ConnectivityStatus.CONNECTED:
             return
 
         try:
-            headers = {API_REQUEST_HEADER_TOKEN: self._login_token}
+            headers = {API_REQUEST_HEADER_TOKEN: self._config_manager.api_token}
 
             for key in LOGIN_HEADERS:
                 headers[key] = LOGIN_HEADERS[key]
 
-            request_data = f"{API_REQUEST_SERIAL_NUMBER}={self._motor_unit_serial}"
+            request_data = (
+                f"{API_REQUEST_SERIAL_NUMBER}={self._config_manager.motor_unit_serial}"
+            )
 
             payload = await self._async_post(ROBOT_DETAILS_URL, headers, request_data)
 
@@ -440,25 +472,35 @@ class RestAPI:
                 f"Failed to retrieve Robot Details, Error: {str(ex)}, Line: {line_number}"
             )
 
-    def _generate_aws_token_encrypted_key(self):
-        _LOGGER.debug(f"ENCRYPT: Serial number: {self._motor_unit_serial}")
+    async def _get_aws_token(self) -> str | None:
+        _LOGGER.debug(
+            f"ENCRYPT: Motor Unit Serial: {self._config_manager.motor_unit_serial}"
+        )
 
-        backend = default_backend()
-        iv = secrets.token_bytes(BLOCK_SIZE)
-        mode = modes.CBC(iv)
-        aes_key = self._get_aes_key()
+        for i in range(0, 10):
+            backend = default_backend()
+            iv = secrets.token_bytes(BLOCK_SIZE)
+            mode = modes.CBC(iv)
+            aes_key = self._get_aes_key()
 
-        cipher = Cipher(algorithms.AES(aes_key), mode, backend=backend)
-        encryptor = cipher.encryptor()
+            aes = algorithms.AES(aes_key)
+            cipher = Cipher(aes, mode, backend=backend)
 
-        data = self._pad(self._motor_unit_serial).encode()
-        ct = encryptor.update(data) + encryptor.finalize()
+            encryptor = cipher.encryptor()
 
-        result_b64 = iv + ct
+            data = self._pad(self._config_manager.motor_unit_serial).encode()
+            ct = encryptor.update(data) + encryptor.finalize()
 
-        result = b64encode(result_b64).decode()
+            result_b64 = iv + ct
 
-        self.data[STORAGE_DATA_AWS_TOKEN_ENCRYPTED_KEY] = result
+            result = b64encode(result_b64).decode()
+
+            if "+" not in result:
+                return result
+
+            await sleep(0.5)
+
+        raise ValueError("Invalid AWS Token generated")
 
     @staticmethod
     def _pad(text) -> str:
@@ -486,20 +528,76 @@ class RestAPI:
 
         return encryption_key
 
-    def _set_status(self, status: ConnectivityStatus):
-        if status != self._status:
-            log_level = ConnectivityStatus.get_log_level(status)
+    def _set_status(self, status: ConnectivityStatus, message: str | None = None):
+        log_level = ConnectivityStatus.get_log_level(status)
 
-            _LOGGER.log(
-                log_level,
-                f"Status changed from '{self._status}' to '{status}'",
-            )
+        if status != self._status:
+            log_message = f"Status update {self._status} --> {status}"
+
+            if message is not None:
+                log_message = f"{log_message}, {message}"
+
+            _LOGGER.log(log_level, log_message)
 
             self._status = status
 
             self._async_dispatcher_send(
                 SIGNAL_API_STATUS, self._config_manager.entry_id, status
             )
+
+        else:
+            log_message = f"Status is {status}"
+
+            if message is None:
+                log_message = f"{log_message}, {message}"
+
+            _LOGGER.log(log_level, log_message)
+
+    async def _handle_client_error(
+        self, endpoint: str, method: str, crex: ClientResponseError
+    ):
+        message = (
+            "Failed to send HTTP request, "
+            f"Endpoint: {endpoint}, "
+            f"Method: {method}, "
+            f"HTTP Status: {crex.message} ({crex.status})"
+        )
+
+        if crex.status in [401]:
+            await self._clean_login_details()
+
+            self._set_status(ConnectivityStatus.EXPIRED_TOKEN, message)
+
+        if crex.status in [404, 405]:
+            self._set_status(ConnectivityStatus.API_NOT_FOUND, message)
+
+        else:
+            self._set_status(ConnectivityStatus.FAILED, message)
+
+    def _handle_server_timeout(self, endpoint: str, method: str):
+        message = (
+            "Failed to send HTTP request due to timeout, "
+            f"Endpoint: {endpoint}, "
+            f"Method: {method}"
+        )
+
+        self._set_status(ConnectivityStatus.FAILED, message)
+
+    def _handle_general_request_failure(
+        self, endpoint: str, method: str, ex: Exception
+    ):
+        exc_type, exc_obj, tb = sys.exc_info()
+        line_number = tb.tb_lineno
+
+        message = (
+            "Failed to send HTTP request, "
+            f"Endpoint: {endpoint}, "
+            f"Method: {method}, "
+            f"Error: {ex}, "
+            f"Line: {line_number}"
+        )
+
+        self._set_status(ConnectivityStatus.FAILED, message)
 
     def set_local_async_dispatcher_send(self, callback):
         self._local_async_dispatcher_send = callback

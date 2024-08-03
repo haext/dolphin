@@ -1,5 +1,75 @@
 # Changelog
 
+## v1.0.19
+
+- Adjust vacuum state to HA v2025.1 standard and support docked, cleaning, returning (cleaning + pickup mode) and error
+- Replace vacuum STOP service with PAUSE service
+- Refactor service declaration to use HA services instead of local
+
+## v1.0.18
+
+- Change interval of calling API to once an hour (instead of a minute)
+- Change interval of calling publishing websocket message to every 5 minutes (instead of 30 seconds)
+- Add status of connectivity - Expired Token to reset all tokens once HTTP Error 401 is being returned by the API
+- Remove duplicate names of constants and duplicate storage of parameters
+- Validate AWS token is being generated as valid base64 token instead retry mechanism of get token API (another deduction of calls to API from 5 to single)
+- Align test API to the same standard of configuration storage of HA
+- Clean entity creation / update log (no actions within logged data)
+
+## v1.0.17
+
+- Optimized login request and store tokens to avoid abuse of the login API
+
+  [#221 - Thousands of requests Maytronics login API per user](https://github.com/sh00t2kill/dolphin-robot/issues/2211)
+
+  [HA #117751 - Block older versions of custom integration mydolphin_plus since they cause crashes](https://github.com/home-assistant/core/pull/117751)
+
+## v1.0.16
+
+- Add email validation on setup and every startup
+- Add reset account password flow from setup or configure (when integration already connected but OTP is required)
+- Refactor new client initialization process to non-blocking call
+- Improved log messages of status changes
+- Removed vacuum actions
+  - Turn on - not supported
+  - Turn off - not supported
+  - Pause - acts as stop, calls stop, no need for duplicate functionality
+  - Toggle - Non turn on / off, no need
+- Clean unused constants
+- Refactor calculated status
+  - Move to dedicated class
+  - Adjust tests
+  - Remove on state, instead introduce idle state, off state remain
+
+| Power Supply State | Robot State                                         | Calculated State |
+| ------------------ | --------------------------------------------------- | ---------------- |
+| error              | \*                                                  | error            |
+| \*                 | fault                                               | error            |
+| holdDelay          | notConnected, programming, init. scanning, finished | holddelay        |
+| holdWeekly         | notConnected, programming, init. scanning, finished | holdweekly       |
+| on                 | init                                                | init             |
+| on                 | programming, scanning                               | cleaning         |
+| programming        | notConnected, init, scanning                        | cleaning         |
+| programming        | programming                                         | programming      |
+| programming        | finished                                            | off              |
+| off                | \* (but fault)                                      | off              |
+
+Unmatched matching, will be treated as off.
+
+## v1.0.15
+
+- Remove startup blocking call
+- Improve reconnect process (cool-down between attempts)
+- Handle timeouts as managed failure instead of general failure
+- Ignore update request when the connection is not established
+- Improved log messages of status changes
+
+## v1.0.14
+
+- Fix reset configuration on integration unload (HA restart)
+- Fix support for temperature sensor only for M700
+- Fix "detected blocking call to open inside the event loop by custom integration" error
+
 ## v1.0.13
 
 - Fix reconnect process
