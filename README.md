@@ -14,10 +14,10 @@ Given the OTP implementation on the app, there is currently no way to support th
 curl -X POST "https://mbapp18.maytronics.com/api/users/register/" \
      -H "appkey: 346BDE92-53D1-4829-8A2E-B496014B586C" \
      -H "Content-Type: application/x-www-form-urlencoded; charset=utf-8" \
-     --data-urlencode "email=<EMAIL>" \
-     --data-urlencode "password=<PASSWORD>" \
-     --data-urlencode "firstName=<FIRST NAME" \
-     --data-urlencode "lastName=<LAST NAME>"
+     --data-urlencode 'email=<EMAIL>' \
+     --data-urlencode 'password=<PASSWORD>' \
+     --data-urlencode 'firstName=<FIRST NAME' \
+     --data-urlencode 'lastName=<LAST NAME>'
 ```
 
 Create this account, changing your user details. Once you have done this, login to the mobile app using this account, and it will be "uplifted" to OTP. Add your robot. You can then add this integration using this username and password.
