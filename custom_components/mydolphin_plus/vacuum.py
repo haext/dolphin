@@ -61,7 +61,6 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
         # Battery level is now handled by a dedicated battery sensor
         self._attr_activity = VacuumActivity.DOCKED
 
-
     async def async_return_to_base(self, **kwargs: Any) -> None:
         """Set the vacuum cleaner to return to the dock."""
         await self.async_execute_device_action(SERVICE_RETURN_TO_BASE)

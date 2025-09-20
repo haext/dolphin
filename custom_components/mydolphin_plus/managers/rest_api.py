@@ -332,7 +332,7 @@ class RestAPI:
 
                 elif isinstance(data, str):
                     _LOGGER.error(f"Invalid response payload of login: {data}")
-                    
+
                     self._set_status(
                         ConnectivityStatus.INVALID_CREDENTIALS,
                         "invalid response payload of login",
