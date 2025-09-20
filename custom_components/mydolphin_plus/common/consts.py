@@ -27,6 +27,7 @@ PLATFORMS = [
     Platform.SENSOR,
     Platform.VACUUM,
     Platform.NUMBER,
+    Platform.REMOTE,
 ]
 
 ATTR_IS_ON = "is_on"

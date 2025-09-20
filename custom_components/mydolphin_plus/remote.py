@@ -27,7 +27,7 @@ async def async_setup_entry(
         async_setup_entities(
             hass,
             entry,
-            Platform.NUMBER,
+            Platform.REMOTE,
             MyDolphinPlusRemoteEntity,
             async_add_entities,
         )
