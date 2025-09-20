@@ -10,6 +10,7 @@ from homeassistant.components.vacuum import (
     SERVICE_SET_FAN_SPEED,
     SERVICE_START,
     StateVacuumEntity,
+    VacuumActivity,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_MODE, ATTR_STATE, Platform
@@ -58,6 +59,7 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
         self._attr_supported_features = entity_description.features
         self._attr_fan_speed_list = entity_description.fan_speed_list
         # Battery level is now handled by a dedicated battery sensor
+        self._attr_activity = VacuumActivity.DOCKED
 
 
     async def async_return_to_base(self, **kwargs: Any) -> None:
@@ -94,9 +96,10 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
 
             fan_speed = attributes.get(ATTR_MODE)
 
-            self._attr_state = state
+            # Set activity instead of state for VacuumActivity enum compatibility
+            self._attr_activity = state
             self._attr_extra_state_attributes = attributes
             self._attr_fan_speed = fan_speed
 
         else:
-            self._attr_state = None
+            self._attr_activity = VacuumActivity.DOCKED
