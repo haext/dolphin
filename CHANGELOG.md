@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.0.22
+
+- Fix deprecated `battery_icon` property in vacuum entity (resolves [#249](https://github.com/sh00t2kill/dolphin-robot/issues/249))
+- Add dedicated battery sensor with proper device class (`SensorDeviceClass.BATTERY`)
+- Remove hardcoded battery level from vacuum entity
+- Fix deprecated vacuum state constants (STATE_DOCKED, STATE_CLEANING, STATE_ERROR, STATE_RETURNING)
+- Replace deprecated constants with VacuumActivity enum for Home Assistant 2026.1 compatibility
+- Update imports in coordinator.py and system_details.py to use VacuumActivity
+- Fix vacuum entity to use activity property instead of direct state setting (resolves [#250](https://github.com/sh00t2kill/dolphin-robot/issues/250))
+- Add VacuumActivity enum support for proper vacuum state management
+- Fix API response handling to prevent 'str' object has no attribute 'get' error
+- Add type checking for login API response to handle string responses gracefully
+- Update manifest.json with integration metadata and version bump
+- Resolves deprecation warnings for Home Assistant 2026.8 compatibility
+
 ## v1.0.21
 
 - Initialize data using `async_request_refresh` instead of `async_config_entry_first_refresh` to remove warning message
