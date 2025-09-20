@@ -58,8 +58,29 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
 
         self._attr_supported_features = entity_description.features
         self._attr_fan_speed_list = entity_description.fan_speed_list
+
         # Battery level is now handled by a dedicated battery sensor
         self._attr_activity = VacuumActivity.DOCKED
+
+    @property
+    def activity(self) -> VacuumActivity | None:
+        """Return the current activity of the vacuum."""
+        state = self._vacuum_state
+
+        if state == "cleaning":
+            return VacuumActivity.CLEANING
+        elif state == "docked":
+            return VacuumActivity.DOCKED
+        elif state == "returning":
+            return VacuumActivity.RETURNING
+        elif state == "idle":
+            return VacuumActivity.IDLE
+        elif state == "paused":
+            return VacuumActivity.PAUSED
+        elif state == "error":
+            return VacuumActivity.ERROR
+        else:
+            return None
 
     async def async_return_to_base(self, **kwargs: Any) -> None:
         """Set the vacuum cleaner to return to the dock."""
@@ -97,6 +118,7 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
 
             # Set activity instead of state for VacuumActivity enum compatibility
             self._attr_activity = state
+
             self._attr_extra_state_attributes = attributes
             self._attr_fan_speed = fan_speed
 
