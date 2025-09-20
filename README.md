@@ -82,26 +82,27 @@ Please remove the integration and re-add it to make it work again.
 
 ## HA Components
 
-| Entity Name                          | Type          | Description                                                                 | Additional information                                                                                                              |
-| ------------------------------------ | ------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| {Robot Name} AWS Broker              | Binary Sensor | Indicates whether the component synchronized with cloud or not              |                                                                                                                                     |
-| {Robot Name} Weekly Schedule         | Binary Sensor | Indicates whether the weekly scheduler is on or off                         |                                                                                                                                     |
-| {Robot Name} LED                     | Light         | Turned on or off the led                                                    |                                                                                                                                     |
-| {Robot Name} LED Intensity           | Number        | Sets the LED intensity values between 0-100                                 |                                                                                                                                     |
-| {Robot Name} Cycle Time {Clean Mode} | Number        | Sets the cycle time of specific clean mode, values between 1 to 600 minutes |                                                                                                                                     |
-| {Robot Name} LED Mode                | Select        | Select led mode                                                             | Blinking, Always on, Disco                                                                                                          |
-| {Robot Name} Status                  | Sensor        | Presents the calculated status of the device                                |                                                                                                                                     |
-| {Robot Name} RSSI                    | Sensor        | Presents the WIFI signal strength in DB                                     |                                                                                                                                     |
-| {Robot Name} Network Name            | Sensor        | Presents the name of the network (WIFI SSID)                                |                                                                                                                                     |
-| {Robot Name} Clean Mode              | Sensor        | Presents the current clean mode                                             |                                                                                                                                     |
-| {Robot Name} Power Supply Status     | Sensor        | Presents the status of the power supply                                     |                                                                                                                                     |
-| {Robot Name} Robot Status            | Sensor        | Presents the status of the robot                                            |                                                                                                                                     |
-| {Robot Name} Robot Model             | Sensor        | Presents the type of the robot                                              |                                                                                                                                     |
-| {Robot Name} Cycle Count             | Sensor        | Presents the number of cycles ran                                           |                                                                                                                                     |
-| {Robot Name} Filter Status           | Sensor        | Presents the status of the filter bag                                       |                                                                                                                                     |
-| {Robot Name} Cycle Time              | Sensor        | Indicates the time the robot is cleaning                                    | Measurement of duration in minutes                                                                                                  |
-| {Robot Name} Cycle Time Left         | Sensor        | Indicates the time left for the robot to complete the cycle                 | Measurement of duration in seconds                                                                                                  |
-| {Robot Name}                         | Vacuum        | Provides functionality of vacuum to the robot                               | Features: State, Fan Speed (Cleaning Mode), Return Home (Pickup), Turn On, Turn Off, Send Command (Navigate, Schedule, Delay Clean) |
+| Entity Name                          | Type          | Description                                                                 | Additional information                                                                                                    |
+| ------------------------------------ | ------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| {Robot Name} AWS Broker              | Binary Sensor | Indicates whether the component synchronized with cloud or not              |                                                                                                                           |
+| {Robot Name} Weekly Schedule         | Binary Sensor | Indicates whether the weekly scheduler is on or off                         |                                                                                                                           |
+| {Robot Name} LED                     | Light         | Turned on or off the led                                                    |                                                                                                                           |
+| {Robot Name} LED Intensity           | Number        | Sets the LED intensity values between 0-100                                 |                                                                                                                           |
+| {Robot Name} Cycle Time {Clean Mode} | Number        | Sets the cycle time of specific clean mode, values between 1 to 600 minutes |                                                                                                                           |
+| {Robot Name} LED Mode                | Select        | Select led mode                                                             | Blinking, Always on, Disco                                                                                                |
+| {Robot Name} Status                  | Sensor        | Presents the calculated status of the device                                |                                                                                                                           |
+| {Robot Name} RSSI                    | Sensor        | Presents the WIFI signal strength in DB                                     |                                                                                                                           |
+| {Robot Name} Network Name            | Sensor        | Presents the name of the network (WIFI SSID)                                |                                                                                                                           |
+| {Robot Name} Clean Mode              | Sensor        | Presents the current clean mode                                             |                                                                                                                           |
+| {Robot Name} Power Supply Status     | Sensor        | Presents the status of the power supply                                     |                                                                                                                           |
+| {Robot Name} Robot Status            | Sensor        | Presents the status of the robot                                            |                                                                                                                           |
+| {Robot Name} Robot Model             | Sensor        | Presents the type of the robot                                              |                                                                                                                           |
+| {Robot Name} Cycle Count             | Sensor        | Presents the number of cycles ran                                           |                                                                                                                           |
+| {Robot Name} Filter Status           | Sensor        | Presents the status of the filter bag                                       |                                                                                                                           |
+| {Robot Name} Cycle Time              | Sensor        | Indicates the time the robot is cleaning                                    | Measurement of duration in minutes                                                                                        |
+| {Robot Name} Cycle Time Left         | Sensor        | Indicates the time left for the robot to complete the cycle                 | Measurement of duration in seconds                                                                                        |
+| {Robot Name} Remote                  | Remote        | Provides virtual joystick control for manual robot navigation               | Features: Activity (Stop, Forward, Backward, Left, Right), Turn On, Turn Off                                              |
+| {Robot Name}                         | Vacuum        | Provides functionality of vacuum to the robot                               | Features: State, Fan Speed (Cleaning Mode), Return Home (Pickup), Turn On, Turn Off, Send Command (Schedule, Delay Clean) |
 
 ### Cleaning Modes
 
@@ -123,30 +124,38 @@ Please remove the integration and re-add it to make it work again.
 
 ## Services
 
-### Navigate
+### Remote Control
 
-Description: Manually navigate the robot
+The Remote entity provides virtual joystick control for manual robot navigation. Use the Remote entity's activity feature to control the robot:
 
-Payload:
+**Available Activities:**
+
+- `stop` - Stop robot movement
+- `forward` - Move robot forward
+- `backward` - Move robot backward
+- `left` - Turn robot left
+- `right` - Turn robot right
+
+**Usage:**
+
+- Turn on the Remote entity to start manual control mode
+- Use the activity selector to choose movement direction
+- Turn off the Remote entity to exit manual control mode
+
+**Example:**
 
 ```yaml
-service: mydolphin_plus.navigate
+# Start remote control with forward movement
+service: remote.turn_on
 target:
-  entity_id: vacuum.{Robot Name}
+  entity_id: remote.{Robot Name}_remote
 data:
-  direction: stop / forward / backward / left / right
-```
+  activity: forward
 
-### Exit Navigation
-
-Description: Exit manual navigation mode
-
-Payload:
-
-```yaml
-service: mydolphin_plus.exit_navigation
+# Stop robot and exit remote control
+service: remote.turn_off
 target:
-  entity_id: vacuum.{Robot Name}
+  entity_id: remote.{Robot Name}_remote
 ```
 
 ## Events

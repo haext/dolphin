@@ -2,9 +2,14 @@
 
 ## v1.0.23
 
-- Remove navigate service
-- Remove exit navigation service
+- Remove navigate service (`mydolphin_plus.navigate`)
+- Remove exit navigation service (`mydolphin_plus.exit_navigation`)
 - Add Remote entity allowing to control and turn off control using a virtual joystick
+  - Provides virtual joystick interface for manual robot navigation
+  - Supports 5 joystick directions: stop, forward, backward, left, right
+  - Uses standard Home Assistant remote entity with activity feature
+  - Replaces the old custom navigate services with native HA functionality
+  - Enables precise manual control of robot movement via UI or automation
 
 ## v1.0.22
 
