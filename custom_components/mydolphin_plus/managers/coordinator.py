@@ -56,6 +56,7 @@ from ..common.consts import (
     DATA_ERROR_TURN_ON_COUNT,
     DATA_FILTER_BAG_INDICATION_RESET_FBI,
     DATA_KEY_AWS_BROKER,
+    DATA_KEY_BATTERY,
     DATA_KEY_BUSY,
     DATA_KEY_CLEAN_MODE,
     DATA_KEY_CYCLE_COUNT,
@@ -366,6 +367,7 @@ class MyDolphinPlusCoordinator(DataUpdateCoordinator):
             slugify(DATA_KEY_AWS_BROKER): self._get_aws_broker_data,
             slugify(DATA_KEY_ROBOT_ERROR): self._get_robot_error_data,
             slugify(DATA_KEY_PWS_ERROR): self._get_pws_error_data,
+            slugify(DATA_KEY_BATTERY): self._get_battery_data,
             slugify(DYNAMIC_DESCRIPTION_TEMPERATURE): self._get_temperature_data,
         }
 
@@ -704,6 +706,14 @@ class MyDolphinPlusCoordinator(DataUpdateCoordinator):
 
     def _get_pws_error_data(self, entity_description) -> dict | None:
         result = self._get_error_code(entity_description, DATA_SECTION_PWS_ERROR)
+
+        return result
+
+    def _get_battery_data(self, _entity_description) -> dict | None:
+        # Pool cleaning robots are always connected to power, so battery is always 100%
+        state = 100
+
+        result = {ATTR_STATE: state}
 
         return result
 

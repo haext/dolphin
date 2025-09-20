@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.22
+
+- Fix deprecated `battery_icon` property in vacuum entity
+- Add dedicated battery sensor with proper device class (`SensorDeviceClass.BATTERY`)
+- Remove hardcoded battery level from vacuum entity
+- Update manifest.json with integration metadata and version bump
+- Resolves deprecation warning for Home Assistant 2026.8 compatibility
+
 ## v1.0.21
 
 - Initialize data using `async_request_refresh` instead of `async_config_entry_first_refresh` to remove warning message

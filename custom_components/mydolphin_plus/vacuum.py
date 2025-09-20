@@ -15,7 +15,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_MODE, ATTR_STATE, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.icon import icon_for_battery_level
 
 from .common.base_entity import MyDolphinPlusBaseEntity, async_setup_entities
 from .common.consts import ATTR_ATTRIBUTES, SIGNAL_DEVICE_NEW
@@ -58,12 +57,8 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
 
         self._attr_supported_features = entity_description.features
         self._attr_fan_speed_list = entity_description.fan_speed_list
-        self._attr_battery_level = 100
+        # Battery level is now handled by a dedicated battery sensor
 
-    @property
-    def battery_icon(self) -> str:
-        """Return the battery icon for the vacuum cleaner."""
-        return icon_for_battery_level(battery_level=self.battery_level, charging=True)
 
     async def async_return_to_base(self, **kwargs: Any) -> None:
         """Set the vacuum cleaner to return to the dock."""
