@@ -8,6 +8,8 @@
 - Fix deprecated vacuum state constants (STATE_DOCKED, STATE_CLEANING, STATE_ERROR, STATE_RETURNING)
 - Replace deprecated constants with VacuumActivity enum for Home Assistant 2026.1 compatibility
 - Update imports in coordinator.py and system_details.py to use VacuumActivity
+- Fix API response handling to prevent 'str' object has no attribute 'get' error
+- Add type checking for login API response to handle string responses gracefully
 - Update manifest.json with integration metadata and version bump
 - Resolves deprecation warnings for Home Assistant 2026.8 compatibility
 

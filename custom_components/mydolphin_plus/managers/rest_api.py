@@ -330,6 +330,14 @@ class RestAPI:
                         "empty response payload of login",
                     )
 
+                elif isinstance(data, str):
+                    _LOGGER.error(f"Invalid response payload of login: {data}")
+                    
+                    self._set_status(
+                        ConnectivityStatus.INVALID_CREDENTIALS,
+                        "invalid response payload of login",
+                    )
+
                 else:
                     _LOGGER.info(f"Logged in to user {username}")
 
