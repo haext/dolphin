@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.23
+
+- Remove navigate service (`mydolphin_plus.navigate`)
+- Remove exit navigation service (`mydolphin_plus.exit_navigation`)
+- Add Remote entity allowing to control and turn off control using a virtual joystick
+  - Provides virtual joystick interface for manual robot navigation
+  - Supports 5 joystick directions: stop, forward, backward, left, right
+  - Uses standard Home Assistant remote entity with activity feature
+  - Replaces the old custom navigate services with native HA functionality
+  - Enables precise manual control of robot movement via UI or automation
+
 ## v1.0.22
 
 - Fix deprecated `battery_icon` property in vacuum entity (resolves [#249](https://github.com/sh00t2kill/dolphin-robot/issues/249))
