@@ -26,12 +26,7 @@ from custom_components.mydolphin_plus.common.consts import (
 from custom_components.mydolphin_plus.common.joystick_direction import JoystickDirection
 from custom_components.mydolphin_plus.common.power_supply_state import PowerSupplyState
 from custom_components.mydolphin_plus.common.robot_state import RobotState
-from homeassistant.components.vacuum import (
-    STATE_CLEANING,
-    STATE_DOCKED,
-    STATE_ERROR,
-    STATE_RETURNING,
-)
+from homeassistant.components.vacuum import VacuumActivity
 from homeassistant.const import ATTR_MODE
 
 
@@ -59,7 +54,7 @@ class SystemDetails:
 
     @property
     def vacuum_state(self) -> str:
-        return self._data.get(ATTR_VACUUM_STATE, STATE_DOCKED)
+        return self._data.get(ATTR_VACUUM_STATE, VacuumActivity.DOCKED)
 
     @property
     def power_unit_state(self) -> PowerSupplyState:
@@ -132,15 +127,15 @@ class SystemDetails:
         mode = cleaning_mode.get(ATTR_MODE, CleanModes.REGULAR)
 
         calculated_state = CalculatedState.OFF
-        vacuum_state = STATE_DOCKED
+        vacuum_state = VacuumActivity.DOCKED
 
         if power_supply_state == PowerSupplyState.ERROR:
             calculated_state = CalculatedState.ERROR
-            vacuum_state = STATE_ERROR
+            vacuum_state = VacuumActivity.ERROR
 
         elif robot_state == RobotState.FAULT:
             calculated_state = CalculatedState.ERROR
-            vacuum_state = STATE_ERROR
+            vacuum_state = VacuumActivity.ERROR
 
         elif power_supply_state == PowerSupplyState.PROGRAMMING:
             if robot_state == RobotState.PROGRAMMING:
@@ -157,9 +152,9 @@ class SystemDetails:
                 calculated_state = CalculatedState.CLEANING
 
             if mode == CleanModes.PICKUP:
-                vacuum_state = STATE_RETURNING
+                vacuum_state = VacuumActivity.RETURNING
             else:
-                vacuum_state = STATE_CLEANING
+                vacuum_state = VacuumActivity.CLEANING
 
         elif power_supply_state == PowerSupplyState.HOLD_DELAY:
             calculated_state = CalculatedState.HOLD_DELAY

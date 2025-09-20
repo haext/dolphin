@@ -12,7 +12,7 @@ from homeassistant.components.vacuum import (
     SERVICE_RETURN_TO_BASE,
     SERVICE_SET_FAN_SPEED,
     SERVICE_START,
-    STATE_DOCKED,
+    VacuumActivity,
 )
 from homeassistant.const import (
     ATTR_ICON,
@@ -53,6 +53,7 @@ from ..common.consts import (
     DATA_ERROR_TURN_ON_COUNT,
     DATA_FILTER_BAG_INDICATION_RESET_FBI,
     DATA_KEY_AWS_BROKER,
+    DATA_KEY_BATTERY,
     DATA_KEY_BUSY,
     DATA_KEY_CLEAN_MODE,
     DATA_KEY_CYCLE_COUNT,
@@ -192,7 +193,7 @@ class MyDolphinPlusCoordinator(DataUpdateCoordinator):
 
         _LOGGER.info(f"Start loading {DOMAIN} integration, Entry ID: {entry.entry_id}")
 
-        await self.async_config_entry_first_refresh()
+        await self.async_request_refresh()
 
         await self._api.initialize()
 
@@ -348,6 +349,7 @@ class MyDolphinPlusCoordinator(DataUpdateCoordinator):
             slugify(DATA_KEY_AWS_BROKER): self._get_aws_broker_data,
             slugify(DATA_KEY_ROBOT_ERROR): self._get_robot_error_data,
             slugify(DATA_KEY_PWS_ERROR): self._get_pws_error_data,
+            slugify(DATA_KEY_BATTERY): self._get_battery_data,
             slugify(DYNAMIC_DESCRIPTION_TEMPERATURE): self._get_temperature_data,
         }
 
@@ -703,6 +705,14 @@ class MyDolphinPlusCoordinator(DataUpdateCoordinator):
 
         return result
 
+    def _get_battery_data(self, _entity_description) -> dict | None:
+        # Pool cleaning robots are always connected to power, so battery is always 100%
+        state = 100
+
+        result = {ATTR_STATE: state}
+
+        return result
+
     def _get_error_code(self, entity_description, data_section_key) -> dict | None:
         data = self.aws_data
 
@@ -785,7 +795,7 @@ class MyDolphinPlusCoordinator(DataUpdateCoordinator):
         self._aws_client.set_cleaning_mode(mode)
 
     async def _vacuum_pause(self, _entity_description: EntityDescription, state):
-        is_idle_state = state == STATE_DOCKED
+        is_idle_state = state == VacuumActivity.DOCKED
         _LOGGER.debug(f"Pause vacuum, State: {state}, State: {state}")
 
         if is_idle_state:

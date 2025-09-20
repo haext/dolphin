@@ -6,6 +6,22 @@ Integration with MyDolphin Plus to monitor and control your robot
 
 [Changelog](https://github.com/sh00t2kill/dolphin-robot/blob/master/CHANGELOG.md)
 
+## Important note RE setup
+
+Given the OTP implementation on the app, there is currently no way to support this in HA. There is, however, a manual way to create a new user account with a password. This is done via curl
+
+```
+curl -X POST "https://mbapp18.maytronics.com/api/users/register/" \
+     -H "appkey: 346BDE92-53D1-4829-8A2E-B496014B586C" \
+     -H "Content-Type: application/x-www-form-urlencoded; charset=utf-8" \
+     --data-urlencode 'email=<EMAIL>' \
+     --data-urlencode 'password=<PASSWORD>' \
+     --data-urlencode 'firstName=<FIRST NAME' \
+     --data-urlencode 'lastName=<LAST NAME>'
+```
+
+Create this account, changing your user details. Once you have done this, login to the mobile app using this account, and it will be "uplifted" to OTP. Add your robot. You can then add this integration using this username and password.
+
 ## How to
 
 #### Requirements
@@ -289,3 +305,36 @@ features:
       - locate
       - return_home
 ```
+
+### OTP (One-Time Password) Authentication Issues
+
+NOTE: New users will have an account created using OTP. As yet, we have not been able to reverse engineer the OTP login process. Please see this issue for further information, and a manual workaround to create an account: https://github.com/sh00t2kill/dolphin-robot/issues/199#issuecomment-2481627312
+
+#### Manual Account Creation Workaround
+
+If you're experiencing OTP authentication issues, you can create a new account directly using the Maytronics API:
+
+```bash
+curl -X POST "https://mbapp18.maytronics.com/api/users/register/" \
+     -H "appkey: 346BDE92-53D1-4829-8A2E-B496014B586C" \
+     -H "Content-Type: application/x-www-form-urlencoded; charset=utf-8" \
+     --data-urlencode "email=your-email@example.com" \
+     --data-urlencode "password=your-new-password" \
+     --data-urlencode "firstName=Your" \
+     --data-urlencode "lastName=Name"
+```
+
+**Steps:**
+
+1. Replace the placeholders with your actual information:
+
+   - `your-email@example.com` - Your email address
+   - `your-new-password` - A new password for your account
+   - `Your` - Your first name
+   - `Name` - Your last name
+
+2. Run the curl command in your terminal
+
+3. Use the new credentials in the Home Assistant integration configuration
+
+**Note:** This creates a fresh account that bypasses the OTP requirement. If you use the same email as your existing account, you may not need to re-pair your robot.
