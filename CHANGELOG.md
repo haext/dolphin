@@ -5,8 +5,11 @@
 - Fix deprecated `battery_icon` property in vacuum entity
 - Add dedicated battery sensor with proper device class (`SensorDeviceClass.BATTERY`)
 - Remove hardcoded battery level from vacuum entity
+- Fix deprecated vacuum state constants (STATE_DOCKED, STATE_CLEANING, STATE_ERROR, STATE_RETURNING)
+- Replace deprecated constants with VacuumActivity enum for Home Assistant 2026.1 compatibility
+- Update imports in coordinator.py and system_details.py to use VacuumActivity
 - Update manifest.json with integration metadata and version bump
-- Resolves deprecation warning for Home Assistant 2026.8 compatibility
+- Resolves deprecation warnings for Home Assistant 2026.8 compatibility
 
 ## v1.0.21
 
