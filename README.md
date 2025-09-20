@@ -338,4 +338,3 @@ curl -X POST "https://mbapp18.maytronics.com/api/users/register/" \
 3. Use the new credentials in the Home Assistant integration configuration
 
 **Note:** This creates a fresh account that bypasses the OTP requirement. If you use the same email as your existing account, you may not need to re-pair your robot.
-
