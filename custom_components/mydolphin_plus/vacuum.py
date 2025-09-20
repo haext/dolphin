@@ -36,7 +36,7 @@ async def async_setup_entry(
             hass,
             entry,
             Platform.VACUUM,
-            MyDolphinPlusLightEntity,
+            MyDolphinPlusVacuumEntity,
             async_add_entities,
         )
 
@@ -45,7 +45,7 @@ async def async_setup_entry(
     )
 
 
-class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
+class MyDolphinPlusVacuumEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
     """Representation of a sensor."""
 
     def __init__(
@@ -64,22 +64,7 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
     @property
     def activity(self) -> VacuumActivity | None:
         """Return the current activity of the vacuum."""
-        state = self._vacuum_state
-
-        if state == "cleaning":
-            return VacuumActivity.CLEANING
-        elif state == "docked":
-            return VacuumActivity.DOCKED
-        elif state == "returning":
-            return VacuumActivity.RETURNING
-        elif state == "idle":
-            return VacuumActivity.IDLE
-        elif state == "paused":
-            return VacuumActivity.PAUSED
-        elif state == "error":
-            return VacuumActivity.ERROR
-        else:
-            return None
+        return self._attr_activity
 
     async def async_return_to_base(self, **kwargs: Any) -> None:
         """Set the vacuum cleaner to return to the dock."""
@@ -106,8 +91,12 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
 
             fan_speed = attributes.get(ATTR_MODE)
 
-            # Set activity instead of state for VacuumActivity enum compatibility
-            self._attr_activity = state
+            # State is already a VacuumActivity enum from SystemDetails
+            if isinstance(state, VacuumActivity):
+                self._attr_activity = state
+            else:
+                # Fallback for string states (shouldn't happen with current implementation)
+                self._attr_activity = VacuumActivity.DOCKED
 
             self._attr_extra_state_attributes = attributes
             self._attr_fan_speed = fan_speed

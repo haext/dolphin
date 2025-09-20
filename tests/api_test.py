@@ -1,12 +1,12 @@
 """test/api_test.py."""
 import asyncio
 from asyncio import sleep
-from datetime import datetime
+from collections.abc import Awaitable
 import json
 import logging
 import os
 import sys
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 from custom_components.mydolphin_plus.common.clean_modes import CleanModes
 from custom_components.mydolphin_plus.common.connectivity_status import (
@@ -16,8 +16,6 @@ from custom_components.mydolphin_plus.common.consts import (
     API_RECONNECT_INTERVAL,
     SIGNAL_API_STATUS,
     SIGNAL_AWS_CLIENT_STATUS,
-    UPDATE_API_INTERVAL,
-    UPDATE_WS_INTERVAL,
     WS_RECONNECT_INTERVAL,
 )
 from custom_components.mydolphin_plus.common.joystick_direction import JoystickDirection

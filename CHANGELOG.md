@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.23
+
+- Remove navigate service
+- Remove exit navigation service
+- Add Remote entity allowing to control and turn off control using a virtual joystick
+
 ## v1.0.22
 
 - Fix deprecated `battery_icon` property in vacuum entity (resolves [#249](https://github.com/sh00t2kill/dolphin-robot/issues/249))
@@ -17,9 +23,6 @@
 
 ## v1.0.21
 
-- Remove navigate service
-- Remove exit navigation service
-- Add Remote entity allowing to control and turn off control using a virtual joystick
 - Initialize data using `async_request_refresh` instead of `async_config_entry_first_refresh` to remove warning message
 - Remove reset password parameter in configuration
 

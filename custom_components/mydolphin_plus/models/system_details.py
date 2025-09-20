@@ -82,7 +82,7 @@ class SystemDetails:
 
     @property
     def is_active(self) -> bool | None:
-        return self.vacuum_state in [STATE_CLEANING, STATE_RETURNING]
+        return self.vacuum_state in [VacuumActivity.CLEANING, VacuumActivity.RETURNING]
 
     @property
     def turn_on_count(self) -> int:
