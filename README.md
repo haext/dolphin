@@ -309,7 +309,9 @@ curl -X POST "https://mbapp18.maytronics.com/api/users/register/" \
 ```
 
 **Steps:**
+
 1. Replace the placeholders with your actual information:
+
    - `your-email@example.com` - Your email address
    - `your-new-password` - A new password for your account
    - `Your` - Your first name
