@@ -5,9 +5,10 @@
   "codeowners": ["@sh00t2kill", "@lordlala", "@elad-bar"],
   "config_flow": true,
   "dependencies": ["http"],
+  "integration_type": "device",
   "documentation": "https://github.com/sh00t2kill/dolphin-robot",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/sh00t2kill/dolphin-robot/issues",
   "requirements": ["awsiotsdk"],
-  "version": "1.0.21"
+  "version": "1.0.23"
 }

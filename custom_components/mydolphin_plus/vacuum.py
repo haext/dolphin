@@ -6,16 +6,15 @@ from homeassistant.components.vacuum import (
     SERVICE_LOCATE,
     SERVICE_PAUSE,
     SERVICE_RETURN_TO_BASE,
-    SERVICE_SEND_COMMAND,
     SERVICE_SET_FAN_SPEED,
     SERVICE_START,
     StateVacuumEntity,
+    VacuumActivity,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_MODE, ATTR_STATE, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.icon import icon_for_battery_level
 
 from .common.base_entity import MyDolphinPlusBaseEntity, async_setup_entities
 from .common.consts import ATTR_ATTRIBUTES, SIGNAL_DEVICE_NEW
@@ -37,7 +36,7 @@ async def async_setup_entry(
             hass,
             entry,
             Platform.VACUUM,
-            MyDolphinPlusLightEntity,
+            MyDolphinPlusVacuumEntity,
             async_add_entities,
         )
 
@@ -46,7 +45,7 @@ async def async_setup_entry(
     )
 
 
-class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
+class MyDolphinPlusVacuumEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
     """Representation of a sensor."""
 
     def __init__(
@@ -58,12 +57,14 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
 
         self._attr_supported_features = entity_description.features
         self._attr_fan_speed_list = entity_description.fan_speed_list
-        self._attr_battery_level = 100
+
+        # Battery level is now handled by a dedicated battery sensor
+        self._attr_activity = VacuumActivity.DOCKED
 
     @property
-    def battery_icon(self) -> str:
-        """Return the battery icon for the vacuum cleaner."""
-        return icon_for_battery_level(battery_level=self.battery_level, charging=True)
+    def activity(self) -> VacuumActivity | None:
+        """Return the current activity of the vacuum."""
+        return self._attr_activity
 
     async def async_return_to_base(self, **kwargs: Any) -> None:
         """Set the vacuum cleaner to return to the dock."""
@@ -78,15 +79,6 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
     async def async_pause(self, **kwargs: Any) -> None:
         await self.async_execute_device_action(SERVICE_PAUSE, self.state)
 
-    async def async_send_command(
-        self,
-        command: str,
-        params: dict[str, Any] | list[Any] | None = None,
-        **kwargs: Any,
-    ) -> None:
-        """Send a command to a vacuum cleaner."""
-        await self.async_execute_device_action(SERVICE_SEND_COMMAND, command, params)
-
     async def async_locate(self, **kwargs: Any) -> None:
         """Locate the vacuum cleaner."""
         await self.async_execute_device_action(SERVICE_LOCATE)
@@ -99,9 +91,15 @@ class MyDolphinPlusLightEntity(MyDolphinPlusBaseEntity, StateVacuumEntity, ABC):
 
             fan_speed = attributes.get(ATTR_MODE)
 
-            self._attr_state = state
+            # State is already a VacuumActivity enum from SystemDetails
+            if isinstance(state, VacuumActivity):
+                self._attr_activity = state
+            else:
+                # Fallback for string states (shouldn't happen with current implementation)
+                self._attr_activity = VacuumActivity.DOCKED
+
             self._attr_extra_state_attributes = attributes
             self._attr_fan_speed = fan_speed
 
         else:
-            self._attr_state = None
+            self._attr_activity = VacuumActivity.DOCKED

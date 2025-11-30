@@ -6,6 +6,22 @@ Integration with MyDolphin Plus to monitor and control your robot
 
 [Changelog](https://github.com/sh00t2kill/dolphin-robot/blob/master/CHANGELOG.md)
 
+## Important note RE setup
+
+Given the OTP implementation on the app, there is currently no way to support this in HA. There is, however, a manual way to create a new user account with a password. This is done via curl
+
+```
+curl -X POST "https://mbapp18.maytronics.com/api/users/register/" \
+     -H "appkey: 346BDE92-53D1-4829-8A2E-B496014B586C" \
+     -H "Content-Type: application/x-www-form-urlencoded; charset=utf-8" \
+     --data-urlencode 'email=<EMAIL>' \
+     --data-urlencode 'password=<PASSWORD>' \
+     --data-urlencode 'firstName=<FIRST NAME' \
+     --data-urlencode 'lastName=<LAST NAME>'
+```
+
+Create this account, changing your user details. Once you have done this, login to the mobile app using this account, and it will be "uplifted" to OTP. Add your robot. You can then add this integration using this username and password.
+
 ## How to
 
 #### Requirements
@@ -66,26 +82,27 @@ Please remove the integration and re-add it to make it work again.
 
 ## HA Components
 
-| Entity Name                          | Type          | Description                                                                 | Additional information                                                                                                              |
-| ------------------------------------ | ------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| {Robot Name} AWS Broker              | Binary Sensor | Indicates whether the component synchronized with cloud or not              |                                                                                                                                     |
-| {Robot Name} Weekly Schedule         | Binary Sensor | Indicates whether the weekly scheduler is on or off                         |                                                                                                                                     |
-| {Robot Name} LED                     | Light         | Turned on or off the led                                                    |                                                                                                                                     |
-| {Robot Name} LED Intensity           | Number        | Sets the LED intensity values between 0-100                                 |                                                                                                                                     |
-| {Robot Name} Cycle Time {Clean Mode} | Number        | Sets the cycle time of specific clean mode, values between 1 to 600 minutes |                                                                                                                                     |
-| {Robot Name} LED Mode                | Select        | Select led mode                                                             | Blinking, Always on, Disco                                                                                                          |
-| {Robot Name} Status                  | Sensor        | Presents the calculated status of the device                                |                                                                                                                                     |
-| {Robot Name} RSSI                    | Sensor        | Presents the WIFI signal strength in DB                                     |                                                                                                                                     |
-| {Robot Name} Network Name            | Sensor        | Presents the name of the network (WIFI SSID)                                |                                                                                                                                     |
-| {Robot Name} Clean Mode              | Sensor        | Presents the current clean mode                                             |                                                                                                                                     |
-| {Robot Name} Power Supply Status     | Sensor        | Presents the status of the power supply                                     |                                                                                                                                     |
-| {Robot Name} Robot Status            | Sensor        | Presents the status of the robot                                            |                                                                                                                                     |
-| {Robot Name} Robot Model             | Sensor        | Presents the type of the robot                                              |                                                                                                                                     |
-| {Robot Name} Cycle Count             | Sensor        | Presents the number of cycles ran                                           |                                                                                                                                     |
-| {Robot Name} Filter Status           | Sensor        | Presents the status of the filter bag                                       |                                                                                                                                     |
-| {Robot Name} Cycle Time              | Sensor        | Indicates the time the robot is cleaning                                    | Measurement of duration in minutes                                                                                                  |
-| {Robot Name} Cycle Time Left         | Sensor        | Indicates the time left for the robot to complete the cycle                 | Measurement of duration in seconds                                                                                                  |
-| {Robot Name}                         | Vacuum        | Provides functionality of vacuum to the robot                               | Features: State, Fan Speed (Cleaning Mode), Return Home (Pickup), Turn On, Turn Off, Send Command (Navigate, Schedule, Delay Clean) |
+| Entity Name                          | Type          | Description                                                                 | Additional information                                                                                                    |
+| ------------------------------------ | ------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| {Robot Name} AWS Broker              | Binary Sensor | Indicates whether the component synchronized with cloud or not              |                                                                                                                           |
+| {Robot Name} Weekly Schedule         | Binary Sensor | Indicates whether the weekly scheduler is on or off                         |                                                                                                                           |
+| {Robot Name} LED                     | Light         | Turned on or off the led                                                    |                                                                                                                           |
+| {Robot Name} LED Intensity           | Number        | Sets the LED intensity values between 0-100                                 |                                                                                                                           |
+| {Robot Name} Cycle Time {Clean Mode} | Number        | Sets the cycle time of specific clean mode, values between 1 to 600 minutes |                                                                                                                           |
+| {Robot Name} LED Mode                | Select        | Select led mode                                                             | Blinking, Always on, Disco                                                                                                |
+| {Robot Name} Status                  | Sensor        | Presents the calculated status of the device                                |                                                                                                                           |
+| {Robot Name} RSSI                    | Sensor        | Presents the WIFI signal strength in DB                                     |                                                                                                                           |
+| {Robot Name} Network Name            | Sensor        | Presents the name of the network (WIFI SSID)                                |                                                                                                                           |
+| {Robot Name} Clean Mode              | Sensor        | Presents the current clean mode                                             |                                                                                                                           |
+| {Robot Name} Power Supply Status     | Sensor        | Presents the status of the power supply                                     |                                                                                                                           |
+| {Robot Name} Robot Status            | Sensor        | Presents the status of the robot                                            |                                                                                                                           |
+| {Robot Name} Robot Model             | Sensor        | Presents the type of the robot                                              |                                                                                                                           |
+| {Robot Name} Cycle Count             | Sensor        | Presents the number of cycles ran                                           |                                                                                                                           |
+| {Robot Name} Filter Status           | Sensor        | Presents the status of the filter bag                                       |                                                                                                                           |
+| {Robot Name} Cycle Time              | Sensor        | Indicates the time the robot is cleaning                                    | Measurement of duration in minutes                                                                                        |
+| {Robot Name} Cycle Time Left         | Sensor        | Indicates the time left for the robot to complete the cycle                 | Measurement of duration in seconds                                                                                        |
+| {Robot Name} Remote                  | Remote        | Provides virtual joystick control for manual robot navigation               | Features: Activity (Stop, Forward, Backward, Left, Right), Turn On, Turn Off                                              |
+| {Robot Name}                         | Vacuum        | Provides functionality of vacuum to the robot                               | Features: State, Fan Speed (Cleaning Mode), Return Home (Pickup), Turn On, Turn Off, Send Command (Schedule, Delay Clean) |
 
 ### Cleaning Modes
 
@@ -107,30 +124,38 @@ Please remove the integration and re-add it to make it work again.
 
 ## Services
 
-### Navigate
+### Remote Control
 
-Description: Manually navigate the robot
+The Remote entity provides virtual joystick control for manual robot navigation. Use the Remote entity's activity feature to control the robot:
 
-Payload:
+**Available Activities:**
+
+- `stop` - Stop robot movement
+- `forward` - Move robot forward
+- `backward` - Move robot backward
+- `left` - Turn robot left
+- `right` - Turn robot right
+
+**Usage:**
+
+- Turn on the Remote entity to start manual control mode
+- Use the activity selector to choose movement direction
+- Turn off the Remote entity to exit manual control mode
+
+**Example:**
 
 ```yaml
-service: mydolphin_plus.navigate
+# Start remote control with forward movement
+service: remote.turn_on
 target:
-  entity_id: vacuum.{Robot Name}
+  entity_id: remote.{Robot Name}_remote
 data:
-  direction: stop / forward / backward / left / right
-```
+  activity: forward
 
-### Exit Navigation
-
-Description: Exit manual navigation mode
-
-Payload:
-
-```yaml
-service: mydolphin_plus.exit_navigation
+# Stop robot and exit remote control
+service: remote.turn_off
 target:
-  entity_id: vacuum.{Robot Name}
+  entity_id: remote.{Robot Name}_remote
 ```
 
 ## Events
@@ -290,5 +315,35 @@ features:
       - return_home
 ```
 
+### OTP (One-Time Password) Authentication Issues
 
-NOTE: New users will have an account created using OTP. As yet, we have not been able to reverse engineer the OTP login process. Please see this issue for further information, and a manual workaround to create an account: https://github.com/sh00t2kill/dolphin-robot/issues/199#issuecomment-2481627312 
+NOTE: New users will have an account created using OTP. As yet, we have not been able to reverse engineer the OTP login process. Please see this issue for further information, and a manual workaround to create an account: https://github.com/sh00t2kill/dolphin-robot/issues/199#issuecomment-2481627312
+
+#### Manual Account Creation Workaround
+
+If you're experiencing OTP authentication issues, you can create a new account directly using the Maytronics API:
+
+```bash
+curl -X POST "https://mbapp18.maytronics.com/api/users/register/" \
+     -H "appkey: 346BDE92-53D1-4829-8A2E-B496014B586C" \
+     -H "Content-Type: application/x-www-form-urlencoded; charset=utf-8" \
+     --data-urlencode "email=your-email@example.com" \
+     --data-urlencode "password=your-new-password" \
+     --data-urlencode "firstName=Your" \
+     --data-urlencode "lastName=Name"
+```
+
+**Steps:**
+
+1. Replace the placeholders with your actual information:
+
+   - `your-email@example.com` - Your email address
+   - `your-new-password` - A new password for your account
+   - `Your` - Your first name
+   - `Name` - Your last name
+
+2. Run the curl command in your terminal
+
+3. Use the new credentials in the Home Assistant integration configuration
+
+**Note:** This creates a fresh account that bypasses the OTP requirement. If you use the same email as your existing account, you may not need to re-pair your robot.

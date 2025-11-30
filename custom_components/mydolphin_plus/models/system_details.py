@@ -1,6 +1,7 @@
 from custom_components.mydolphin_plus.common.calculated_state import CalculatedState
 from custom_components.mydolphin_plus.common.clean_modes import CleanModes
 from custom_components.mydolphin_plus.common.consts import (
+    ATTR_ACTIVITY,
     ATTR_CALCULATED_STATUS,
     ATTR_IS_BUSY,
     ATTR_POWER_SUPPLY_STATE,
@@ -10,6 +11,7 @@ from custom_components.mydolphin_plus.common.consts import (
     ATTR_TURN_ON_COUNT,
     ATTR_VACUUM_STATE,
     DATA_CYCLE_INFO_CLEANING_MODE,
+    DATA_SECTION_ACTIVITY,
     DATA_SECTION_CYCLE_INFO,
     DATA_SECTION_SYSTEM_STATE,
     DATA_SYSTEM_STATE_IS_BUSY,
@@ -21,24 +23,22 @@ from custom_components.mydolphin_plus.common.consts import (
     DATA_SYSTEM_STATE_TURN_ON_COUNT,
     DEFAULT_TIME_ZONE_NAME,
 )
+from custom_components.mydolphin_plus.common.joystick_direction import JoystickDirection
 from custom_components.mydolphin_plus.common.power_supply_state import PowerSupplyState
 from custom_components.mydolphin_plus.common.robot_state import RobotState
-from homeassistant.components.vacuum import (
-    STATE_CLEANING,
-    STATE_DOCKED,
-    STATE_ERROR,
-    STATE_RETURNING,
-)
+from homeassistant.components.vacuum import VacuumActivity
 from homeassistant.const import ATTR_MODE
 
 
 class SystemDetails:
     _is_updated: bool
     _data: dict
+    _supported_activities: list[str]
 
     def __init__(self):
         self._is_updated = False
         self._data = {}
+        self._supported_activities = list(JoystickDirection)
 
     @property
     def is_updated(self) -> bool:
@@ -54,7 +54,7 @@ class SystemDetails:
 
     @property
     def vacuum_state(self) -> str:
-        return self._data.get(ATTR_VACUUM_STATE, STATE_DOCKED)
+        return self._data.get(ATTR_VACUUM_STATE, VacuumActivity.DOCKED)
 
     @property
     def power_unit_state(self) -> PowerSupplyState:
@@ -71,6 +71,18 @@ class SystemDetails:
     @property
     def is_busy(self) -> bool | None:
         return self._data.get(ATTR_IS_BUSY)
+
+    @property
+    def is_manual_mode(self) -> bool | None:
+        return self.activity in self._supported_activities
+
+    @property
+    def activity(self) -> str:
+        return self._data.get(ATTR_ACTIVITY)
+
+    @property
+    def is_active(self) -> bool | None:
+        return self.vacuum_state in [VacuumActivity.CLEANING, VacuumActivity.RETURNING]
 
     @property
     def turn_on_count(self) -> int:
@@ -115,15 +127,15 @@ class SystemDetails:
         mode = cleaning_mode.get(ATTR_MODE, CleanModes.REGULAR)
 
         calculated_state = CalculatedState.OFF
-        vacuum_state = STATE_DOCKED
+        vacuum_state = VacuumActivity.DOCKED
 
         if power_supply_state == PowerSupplyState.ERROR:
             calculated_state = CalculatedState.ERROR
-            vacuum_state = STATE_ERROR
+            vacuum_state = VacuumActivity.ERROR
 
         elif robot_state == RobotState.FAULT:
             calculated_state = CalculatedState.ERROR
-            vacuum_state = STATE_ERROR
+            vacuum_state = VacuumActivity.ERROR
 
         elif power_supply_state == PowerSupplyState.PROGRAMMING:
             if robot_state == RobotState.PROGRAMMING:
@@ -140,15 +152,17 @@ class SystemDetails:
                 calculated_state = CalculatedState.CLEANING
 
             if mode == CleanModes.PICKUP:
-                vacuum_state = STATE_RETURNING
+                vacuum_state = VacuumActivity.RETURNING
             else:
-                vacuum_state = STATE_CLEANING
+                vacuum_state = VacuumActivity.CLEANING
 
         elif power_supply_state == PowerSupplyState.HOLD_DELAY:
             calculated_state = CalculatedState.HOLD_DELAY
 
         elif power_supply_state == PowerSupplyState.HOLD_WEEKLY:
             calculated_state = CalculatedState.HOLD_WEEKLY
+
+        activity = aws_data.get(DATA_SECTION_ACTIVITY)
 
         result = {
             ATTR_VACUUM_STATE: vacuum_state,
@@ -159,6 +173,7 @@ class SystemDetails:
             ATTR_IS_BUSY: is_busy,
             ATTR_TURN_ON_COUNT: turn_on_count,
             ATTR_TIME_ZONE: f"{time_zone_name} ({time_zone})",
+            ATTR_ACTIVITY: activity,
         }
 
         return result
